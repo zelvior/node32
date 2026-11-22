@@ -285,11 +285,6 @@ if defined v8temporal       set configure_flags=%configure_flags% --v8-enable-te
 if defined v8windbg         set configure_flags=%configure_flags% --enable-v8windbg
 if defined with_perfetto    set configure_flags=%configure_flags% --with-perfetto
 
-if "%target_arch%"=="x86" (
-  echo "32-bit Windows builds are not supported anymore."
-  exit /b 1
-)
-
 if not exist "%~dp0deps\icu" goto no-depsicu
 if "%target%"=="Clean" echo deleting %~dp0deps\icu
 if "%target%"=="Clean" rmdir /S /Q %~dp0deps\icu
@@ -479,6 +474,7 @@ if defined nobuild goto :after-build
 set "msbcpu=/m:2"
 if "%NUMBER_OF_PROCESSORS%"=="1" set "msbcpu=/m:1"
 set "msbplatform=x64"
+if "%target_arch%"=="x86" set "msbplatform=Win32"
 if "%target_arch%"=="arm64" set "msbplatform=ARM64"
 if "%target%"=="Build" (
   if defined no_cctest set target=node
@@ -943,7 +939,7 @@ set exit_code=1
 goto exit
 
 :help
-echo vcbuild.bat [debug/release] [msi] [doc] [test/test-all/test-addons/test-doc/test-js-native-api/test-node-api/test-internet/test-tick-processor/test-known-issues/test-node-inspect/test-check-deopts/test-npm/test-v8/test-v8-intl/test-v8-benchmarks/test-v8-all] [build-addons/build-js-native-api-tests/build-node-api-tests/build-ffi-tests] [ignore-flaky] [static/dll] [noprojgen] [projgen] [clang-cl] [ccache path-to-ccache] [small-icu/full-icu/without-intl] [nobuild] [nosnapshot] [nonpm] [ltcg] [thin-lto] [lto] [lto-jobs number-of-jobs] [pgo-generate] [pgo-use] [licensetf] [sign] [x64/arm64] [vs2022/vs2026] [download-all] [enable-vtune] [lint/lint-ci/lint-js/lint-md] [lint-md-build] [format-md] [package] [build-release] [upload] [no-NODE-OPTIONS] [link-module path-to-module] [debug-http2] [debug-nghttp2] [clean] [cctest] [no-cctest] [openssl-no-asm]
+echo vcbuild.bat [debug/release] [msi] [doc] [test/test-all/test-addons/test-doc/test-js-native-api/test-node-api/test-internet/test-tick-processor/test-known-issues/test-node-inspect/test-check-deopts/test-npm/test-v8/test-v8-intl/test-v8-benchmarks/test-v8-all] [build-addons/build-js-native-api-tests/build-node-api-tests/build-ffi-tests] [ignore-flaky] [static/dll] [noprojgen] [projgen] [clang-cl] [ccache path-to-ccache] [small-icu/full-icu/without-intl] [nobuild] [nosnapshot] [nonpm] [ltcg] [thin-lto] [lto] [lto-jobs number-of-jobs] [pgo-generate] [pgo-use] [licensetf] [sign] [x86/x64/arm64] [vs2022/vs2026] [download-all] [enable-vtune] [lint/lint-ci/lint-js/lint-md] [lint-md-build] [format-md] [package] [build-release] [upload] [no-NODE-OPTIONS] [link-module path-to-module] [debug-http2] [debug-nghttp2] [clean] [cctest] [no-cctest] [openssl-no-asm]
 echo Examples:
 echo   vcbuild.bat                          : builds release build
 echo   vcbuild.bat debug                    : builds debug build

@@ -440,7 +440,12 @@ int uv_clock_gettime(uv_clock_id clock_id, uv_timespec64_t* ts) {
       ts->tv_nsec = t % 1000000000;
       return 0;
     case UV_CLOCK_REALTIME:
-      GetSystemTimePreciseAsFileTime(&ft);
+      uv__once_init();
+      if (pGetSystemTimePreciseAsFileTime != NULL)
+        pGetSystemTimePreciseAsFileTime(&ft);
+      else
+        /* Windows 7 lacks the precise API; this clock has lower resolution. */
+        GetSystemTimeAsFileTime(&ft);
       /* In 100-nanosecond increments from 1601-01-01 UTC because why not? */
       t = (int64_t) ft.dwHighDateTime << 32 | ft.dwLowDateTime;
       /* Convert to UNIX epoch, 1970-01-01. Still in 100 ns increments. */
@@ -1403,17 +1408,23 @@ int uv_os_unsetenv(const char* name) {
 
 int uv_os_gethostname(char* buffer, size_t* size) {
   WCHAR buf[UV_MAXHOSTNAMESIZE];
+  DWORD len;
 
   if (buffer == NULL || size == NULL || *size == 0)
     return UV_EINVAL;
 
   uv__once_init(); /* Initialize winsock */
 
-  if (pGetHostNameW == NULL)
-    return UV_ENOSYS;
-
-  if (pGetHostNameW(buf, UV_MAXHOSTNAMESIZE) != 0)
-    return uv_translate_sys_error(WSAGetLastError());
+  if (pGetHostNameW != NULL) {
+    if (pGetHostNameW(buf, UV_MAXHOSTNAMESIZE) != 0)
+      return uv_translate_sys_error(WSAGetLastError());
+  } else {
+    /* Windows 7 has no GetHostNameW. This preserves Unicode, although it
+     * doesn't consult Winsock namespace providers as GetHostNameW does. */
+    len = ARRAY_SIZE(buf);
+    if (!GetComputerNameExW(ComputerNameDnsHostname, buf, &len))
+      return uv_translate_sys_error(GetLastError());
+  }
 
   return uv__copy_utf16_to_utf8(buf, -1, buffer, size);
 }

@@ -201,6 +201,15 @@
                 'USE_FILE32API'
               ],
             }],
+            # The NDK's CPU feature implementation is needed by the Android
+            # NEON path, but must not be compiled into native host tools.
+            ['OS=="android" and arm_fpu=="neon"', {
+              'target_conditions': [
+                ['_toolset=="target"', {
+                  'sources': [ '<(ZLIB_ROOT)/android-cpu-features.c' ],
+                }],
+              ],
+            }],
             # Incorporate optimizations where possible.
             ['(target_arch in "ia32 x64" and OS!="ios") or arm_fpu=="neon"', {
               'dependencies': [ 'zlib_data_chunk_simd' ],

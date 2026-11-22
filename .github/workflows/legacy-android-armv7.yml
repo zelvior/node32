@@ -1,0 +1,89 @@
+name: Experimental Android ARMv7
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'arena/**'
+    paths:
+      - '.github/workflows/legacy-android-armv7.yml'
+      - 'android-configure'
+      - 'android_configure.py'
+      - 'configure*'
+      - '*.gyp*'
+      - 'deps/**'
+      - 'src/**'
+      - 'lib/**'
+      - 'tools/legacy/**'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+jobs:
+  android-armv7:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [executable, shared]
+    env:
+      NDK_VERSION: 27.2.12479018
+      # The ARM simulator in the V8 snapshot generator needs a 32-bit host.
+      CC_host: gcc-13 -m32
+      CXX_host: g++-13 -m32
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install host multilib and Android NDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13-multilib g++-13-multilib
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+      - name: Configure and build
+        run: |
+          set -euxo pipefail
+          NDK="$ANDROID_HOME/ndk/$NDK_VERSION"
+          options=(--v8-disable-temporal-support)
+          if [ "${{ matrix.build }}" = shared ]; then options+=(--shared); fi
+          ./android-configure "$NDK" 24 arm "${options[@]}"
+          make -j2 V=1
+      - name: Inspect target artifacts
+        run: |
+          set -euxo pipefail
+          mkdir legacy-android-armv7
+          if [ "${{ matrix.build }}" = shared ]; then
+            binary=out/Release/libnode.so
+          else
+            binary=out/Release/node
+          fi
+          test -f "$binary"
+          readelf -h "$binary" | tee legacy-android-armv7/elf-header.txt
+          grep -E 'Class:[[:space:]]+ELF32' legacy-android-armv7/elf-header.txt
+          grep -E 'Machine:[[:space:]]+ARM' legacy-android-armv7/elf-header.txt
+          readelf -d "$binary" > legacy-android-armv7/dynamic-section.txt
+          cp "$binary" tools/legacy/smoke.js legacy-android-armv7/
+          if [ "${{ matrix.build }}" = shared ]; then
+            python3 tools/install.py install --headers-only \
+              --dest-dir "$PWD/legacy-android-armv7" --prefix / --silent
+          fi
+          if grep -q 'libc++_shared.so' legacy-android-armv7/dynamic-section.txt; then
+            cp "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so" legacy-android-armv7/
+          fi
+          (cd legacy-android-armv7 && sha256sum "$(basename "$binary")" smoke.js > SHA256SUMS)
+          if [ -f legacy-android-armv7/libc++_shared.so ]; then
+            (cd legacy-android-armv7 && sha256sum libc++_shared.so >> SHA256SUMS)
+          fi
+          printf '%s\n' \
+            'Experimental Android ARMv7 build; not tested on an Android device.' \
+            'API 24; Temporal disabled; executable and shared builds are separate.' \
+            "Source revision: $GITHUB_SHA" > legacy-android-armv7/README.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: experimental-node-android-armv7-${{ matrix.build }}
+          path: legacy-android-armv7/
+          if-no-files-found: error
+          retention-days: 7

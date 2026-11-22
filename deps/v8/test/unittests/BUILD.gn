@@ -534,6 +534,7 @@ v8_cluster_source_set("v8_unittests_sources") {
     "sandbox/segmented-table-unittest.cc",
     "sandbox/trap-fuzzer-unittest.cc",
     "strings/char-predicates-unittest.cc",
+    "strings/string-hasher-unittest.cc",
     "strings/unicode-unittest.cc",
     "tasks/background-compile-task-unittest.cc",
     "tasks/cancelable-tasks-unittest.cc",
