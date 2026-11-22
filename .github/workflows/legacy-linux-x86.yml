@@ -1,0 +1,72 @@
+name: Experimental Linux x86
+
+# This is a proof-of-concept build, not an official Node.js release.
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'arena/**'
+    paths:
+      - '.github/workflows/legacy-linux-x86.yml'
+      - 'deps/**'
+      - 'src/**'
+      - 'lib/**'
+      - 'test/parallel/test-legacy-32bit-smoke.js'
+      - 'tools/legacy/**'
+      - '*.gyp*'
+      - 'configure*'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      # V8's IA-32 target needs IA-32 host tools as well as multilib headers.
+      CC: gcc-13 -m32
+      CXX: g++-13 -m32
+      CC_host: gcc-13 -m32
+      CXX_host: g++-13 -m32
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install 32-bit toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13-multilib g++-13-multilib
+          gcc-13 --version
+          g++-13 --version
+      - name: Configure and build
+        run: |
+          ./configure --dest-cpu=ia32 --v8-disable-temporal-support
+          make -j2 V=1
+      - name: Verify architecture and run smoke tests
+        run: |
+          set -euxo pipefail
+          readelf -h out/Release/node
+          readelf -h out/Release/node | grep -E 'Class:[[:space:]]+ELF32'
+          readelf -h out/Release/node | grep -E 'Machine:[[:space:]]+Intel 80386'
+          out/Release/node -p 'JSON.stringify(process.versions)'
+          out/Release/node -e "require('assert').strictEqual(process.arch, 'ia32')"
+          python3 tools/test.py --mode=release parallel/test-legacy-32bit-smoke
+      - name: Prepare experimental artifact
+        run: |
+          mkdir legacy-linux-x86
+          cp out/Release/node tools/legacy/smoke.js legacy-linux-x86/
+          (cd legacy-linux-x86 && sha256sum node smoke.js > SHA256SUMS)
+          readelf --version-info legacy-linux-x86/node > legacy-linux-x86/elf-version-info.txt
+          printf '%s\n' \
+            'Experimental Node.js x86 build; not an official release.' \
+            'Built on Ubuntu 24.04 with Temporal disabled; glibc requirements are listed in elf-version-info.txt.' \
+            "Source revision: $GITHUB_SHA" > legacy-linux-x86/README.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: experimental-node-linux-x86
+          path: legacy-linux-x86/
+          if-no-files-found: error
+          retention-days: 7

@@ -42,6 +42,9 @@ sPowerRegisterSuspendResumeNotification pPowerRegisterSuspendResumeNotification;
 /* bcryptprimitives.dll function pointer */
 sProcessPrng pProcessPrng;
 
+/* Kernel32.dll function pointer */
+sGetSystemTimePreciseAsFileTime pGetSystemTimePreciseAsFileTime;
+
 /* User32.dll function pointer */
 sSetWinEventHook pSetWinEventHook;
 
@@ -52,6 +55,7 @@ uv_sGetHostNameW pGetHostNameW;
 sGetFileInformationByName pGetFileInformationByName;
 
 void uv__winapi_init(void) {
+  HMODULE kernel32_module;
   HMODULE ntdll_module;
   HMODULE powrprof_module;
   HMODULE user32_module;
@@ -72,10 +76,17 @@ void uv__winapi_init(void) {
     sNtQueryInformationProcess pNtQueryInformationProcess;
     sPowerRegisterSuspendResumeNotification pPowerRegisterSuspendResumeNotification;
     sProcessPrng pProcessPrng;
+    sGetSystemTimePreciseAsFileTime pGetSystemTimePreciseAsFileTime;
     sSetWinEventHook pSetWinEventHook;
     uv_sGetHostNameW pGetHostNameW;
     sGetFileInformationByName pGetFileInformationByName;
   } u;
+
+  kernel32_module = GetModuleHandleW(L"kernel32.dll");
+  if (kernel32_module != NULL) {
+    u.proc = GetProcAddress(kernel32_module, "GetSystemTimePreciseAsFileTime");
+    pGetSystemTimePreciseAsFileTime = u.pGetSystemTimePreciseAsFileTime;
+  }
 
   ntdll_module = GetModuleHandleW(L"ntdll.dll");
   if (ntdll_module == NULL) {

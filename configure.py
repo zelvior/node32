@@ -1844,6 +1844,7 @@ def host_arch_win():
 
   matchup = {
     'AMD64'  : 'x64',
+    'x86'    : 'ia32',
     'arm'    : 'arm',
     'mips'   : 'mips',
     'ARM64'  : 'arm64'
@@ -1956,6 +1957,10 @@ def configure_node(o):
   # x86_64 is common across linuxes, allow it as an alias for x64
   if target_arch == 'x86_64':
     target_arch = 'x64'
+  if flavor == 'win' and target_arch == 'ia32':
+    # V8's IA-32 snapshot tools must themselves be IA-32. Modern 64-bit
+    # Windows hosts can run them through the Windows x86 compatibility layer.
+    host_arch = 'ia32'
   o['variables']['host_arch'] = host_arch
   o['variables']['target_arch'] = target_arch
   o['variables']['node_byteorder'] = sys.byteorder
@@ -1965,8 +1970,10 @@ def configure_node(o):
   # triple for the target architecture.
   o['variables']['cargo_rust_target'] = ''
   if flavor == 'win':
-    o['variables']['cargo_rust_target'] = \
-      'aarch64-pc-windows-msvc' if target_arch == 'arm64' else 'x86_64-pc-windows-msvc'
+    o['variables']['cargo_rust_target'] = {
+      'arm64': 'aarch64-pc-windows-msvc',
+      'ia32': 'i686-pc-windows-msvc',
+    }.get(target_arch, 'x86_64-pc-windows-msvc')
   # Always set the Rust target for x64 macOS in case we will be building
   # under Rosetta 2.
   if flavor == 'mac' and target_arch == 'x64':

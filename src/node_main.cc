@@ -32,20 +32,26 @@
 #define SKIP_CHECK_STRLEN (sizeof(SKIP_CHECK_VALUE) - 1)
 
 int wmain(int argc, wchar_t* wargv[]) {
-  // Windows Server 2012 (not R2) is supported until 10/10/2023, so we allow it
-  // to run in the experimental support tier.
   char buf[SKIP_CHECK_STRLEN + 1];
-  if (!IsWindows10OrGreater() &&
+#if defined(_M_IX86)
+  // The IA-32 legacy port is experimental and requires Windows 7 SP1 or newer.
+  const bool supported_version = IsWindows7SP1OrGreater();
+  const char* minimum_version = "Windows 7 SP1";
+#else
+  const bool supported_version = IsWindows10OrGreater();
+  const char* minimum_version = "Windows 10 or Windows Server 2016";
+#endif
+  if (!supported_version &&
       (GetEnvironmentVariableA(SKIP_CHECK_VAR, buf, sizeof(buf)) !=
            SKIP_CHECK_STRLEN ||
        strncmp(buf, SKIP_CHECK_VALUE, SKIP_CHECK_STRLEN) != 0)) {
     fprintf(stderr,
-            "Node.js is only supported on Windows 10, Windows "
-            "Server 2016, or higher.\n"
+            "Node.js requires %s or higher.\n"
             "Setting the " SKIP_CHECK_VAR " environment variable "
             "to 1 skips this\ncheck, but Node.js might not execute "
             "correctly. Any issues encountered on\nunsupported "
-            "platforms will not be fixed.");
+            "platforms will not be fixed.",
+            minimum_version);
     exit(ERROR_EXE_MACHINE_TYPE_MISMATCH);
   }
 

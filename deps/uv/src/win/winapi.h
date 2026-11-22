@@ -4759,6 +4759,7 @@ typedef DWORD (WINAPI *sPowerRegisterSuspendResumeNotification)
                _PHPOWERNOTIFY RegistrationHandle);
 
 typedef BOOL (WINAPI *sProcessPrng)(/*_Out_*/PBYTE pbData, SIZE_T cbData);
+typedef VOID (WINAPI *sGetSystemTimePreciseAsFileTime)(LPFILETIME);
 
 /* from Winuser.h */
 typedef VOID (CALLBACK* WINEVENTPROC)
@@ -4826,6 +4827,9 @@ extern sPowerRegisterSuspendResumeNotification pPowerRegisterSuspendResumeNotifi
 
 /* bcryptprimitives.dll function pointer */
 extern sProcessPrng pProcessPrng;
+
+/* Kernel32.dll function pointer */
+extern sGetSystemTimePreciseAsFileTime pGetSystemTimePreciseAsFileTime;
 
 /* User32.dll function pointer */
 extern sSetWinEventHook pSetWinEventHook;

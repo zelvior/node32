@@ -31,6 +31,7 @@ acceptable_pythons = (
 )
 if sys.version_info[:2] in acceptable_pythons:
   import android_configure
+  sys.exit(android_configure.main())
 else:
   python_cmds = ['python{}.{}'.format(*vers) for vers in acceptable_pythons]
   sys.stderr.write('Please use {}.\n'.format(' or '.join(python_cmds)))

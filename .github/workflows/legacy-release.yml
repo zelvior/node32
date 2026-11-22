@@ -1,0 +1,91 @@
+name: Experimental legacy GitHub release
+
+# Deliberately manual: an existing tag must identify this exact workflow commit.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing legacy-* tag pointing to the selected commit'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify repository and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$REPOSITORY" = nodejs/node ]; then
+            echo 'Experimental releases must not be published to nodejs/node.' >&2
+            exit 1
+          fi
+          if ! [[ "$RELEASE_TAG" =~ ^legacy-[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || [ "${#RELEASE_TAG}" -gt 100 ]; then
+            echo 'Tag must start with legacy- and contain only letters, digits, dots, underscores, or hyphens.' >&2
+            exit 1
+          fi
+          gh api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null
+          tag_sha=$(gh api "repos/$REPOSITORY/commits/refs/tags/$RELEASE_TAG" --jq .sha)
+          if [ "$tag_sha" != "$EXPECTED_SHA" ]; then
+            echo 'The tag does not point to the selected workflow commit.' >&2
+            exit 1
+          fi
+
+  tool-tests:
+    needs: verify-tag
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test build helpers and release packaging
+        run: make tooltest
+
+  linux:
+    needs: [verify-tag, tool-tests]
+    uses: ./.github/workflows/legacy-linux-x86.yml
+  windows:
+    needs: [verify-tag, tool-tests]
+    uses: ./.github/workflows/legacy-windows-x86.yml
+  android:
+    needs: [verify-tag, tool-tests]
+    uses: ./.github/workflows/legacy-android-armv7.yml
+
+  release:
+    needs: [verify-tag, tool-tests, linux, windows, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
+        with:
+          path: artifacts
+      - name: Validate and package all four artifacts
+        run: python3 tools/legacy/package-release.py artifacts release-assets
+      - name: Publish experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Recheck immediately before publishing in case the tag changed.
+          tag_sha=$(gh api "repos/$REPOSITORY/commits/refs/tags/$RELEASE_TAG" --jq .sha)
+          [ "$tag_sha" = "$EXPECTED_SHA" ]
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$REPOSITORY" --verify-tag --draft --prerelease \
+            --title "Experimental legacy Node.js $RELEASE_TAG" \
+            --notes "Experimental, unofficial builds from commit $EXPECTED_SHA. Windows 7 and Android device compatibility has not been established. Android artifacts are inspected but not run on a device; the shared library needs an embedding test. Temporal is disabled. See the included README files for limitations."
+          gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" --draft=false
